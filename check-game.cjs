@@ -45,3 +45,14 @@ const persisted=JSON.parse(storage.get('jumpcraft-library-v1'));assert.equal(per
 const anotherTab={id:'other-tab-game',name:'Another tab adventure',settings:{},custom:null};storage.set('jumpcraft-library-v1',JSON.stringify({...persisted,games:[...persisted.games,anotherTab]}));vm.runInContext('save()',context);assert.equal(JSON.parse(storage.get('jumpcraft-library-v1')).games.length,4);
 const reloadNodes=new Map();const reloadDocument={...document,querySelector(s){if(!reloadNodes.has(s))reloadNodes.set(s,node());return reloadNodes.get(s)}};
 const reload={...context,document:reloadDocument};vm.createContext(reload);vm.runInContext(fs.readFileSync('dist/game.js','utf8'),reload);assert.equal(vm.runInContext('library.games.length',reload),4);assert.equal(vm.runInContext('library.active',reload),persisted.active);console.log('PASS: timer waits for movement, hundredths, autosave across tabs, library survives reload');
+vm.runInContext(`
+const inactive=library.games.find(g=>g.id!==library.active),activeBefore=library.active,countBefore=library.games.length;
+requestDeleteGame(inactive.id);check(pendingDeleteId===inactive.id&&!$('#deleteConfirmation').hidden,'delete shows confirmation');cancelDeleteGame();confirmDeleteGame();check(library.games.length===countBefore,'cancel keeps game');
+requestDeleteGame(inactive.id);confirmDeleteGame();check(library.games.length===countBefore-1&&!library.games.some(g=>g.id===inactive.id),'confirmed delete removes game');check(library.active===activeBefore,'inactive deletion keeps active game');
+library.games.push(inactive);save();check(!library.games.some(g=>g.id===inactive.id),'stale data cannot restore deleted game');
+const deletingActive=library.active;requestDeleteGame(deletingActive);confirmDeleteGame();check(library.active!==deletingActive&&!!currentGame(),'active deletion opens another game');
+while(library.games.length>1){requestDeleteGame(library.games.find(g=>g.id!==library.active).id);confirmDeleteGame()}
+const lastId=library.active;requestDeleteGame(lastId);confirmDeleteGame();check(library.games.length===1&&library.active!==lastId&&world.blocks.length>0,'deleting last game makes playable starter');save();
+`,context);
+const afterDelete=JSON.parse(storage.get('jumpcraft-library-v1'));assert.equal(afterDelete.games.length,1);assert(afterDelete.deletedIds.length>=4);
+const afterDeleteNodes=new Map();const afterDeleteDocument={...document,querySelector(s){if(!afterDeleteNodes.has(s))afterDeleteNodes.set(s,node());return afterDeleteNodes.get(s)}};const restored={...context,document:afterDeleteDocument};vm.createContext(restored);vm.runInContext(fs.readFileSync('dist/game.js','utf8'),restored);assert.equal(vm.runInContext('library.games.length',restored),1);assert.equal(vm.runInContext('library.active',restored),afterDelete.active);console.log('PASS: delete confirmation/cancel, active and last-game deletion, autosave/reload persistence');
