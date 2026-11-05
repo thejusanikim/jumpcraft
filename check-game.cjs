@@ -5,7 +5,12 @@ vm.runInContext(`
 function check(v,msg){if(!v)throw Error(msg)}
 for(let i=0;i<3;i++){const level=makeLevel(i);check(validWorld(level),'level validity');check(level.blocks.every(b=>b.w===25&&b.h===25),'all terrain uses small blocks')}
 for(let i=0;i<120;i++)step();check(p.ground&&p.y===491,'lands on starting blocks');
+check(elapsed===0&&!timerStarted&&$('#timer').textContent==='00:00.00','timer waits through idle spawn and landing');
+keys.KeyD=true;step();check(timerStarted&&elapsed>0,'moving starts timer');keys={};for(let i=0;i<60;i++)step();check(elapsed>1,'timer continues when character stops');
+check(formatTime(12.34)==='00:12.34'&&formatTime(60.01)==='01:00.01','timer displays hundredths and minute rollover');
+restart();for(let i=0;i<30;i++)step();check(elapsed===0&&!timerStarted,'restart waits for movement again');
 keys.Space=true;step();check(p.vy<0&&p.jumps===1,'first jump');keys.Space=false;step();keys.Space=true;step();check(p.vy<0&&p.jumps===2,'double jump');keys.Space=false;step();keys.Space=true;step();check(p.jumps===2,'no third jump');
+check(timerStarted&&elapsed>0,'jump starts timer');
 restart();settings.doubleJump=false;keys={Space:true};jumpHeld=false;step();keys.Space=false;step();keys.Space=true;let vy=p.vy;step();check(p.jumps===1&&p.vy>vy,'double jump disabled');
 restart();keys={};p.x=coins[0].x;p.y=coins[0].y;step();check(coins[0].got,'coin collected');
 p.x=world.goal.x;p.y=world.goal.y;step();check(!playing,'finish triggers win');
@@ -36,5 +41,7 @@ openMenu();let time=elapsed;step();check(elapsed===time,'menu pauses gameplay');
 console.log('PASS: gameplay, unbounded block editing, finish controls, animation states, double-jump toggle, independent games, duplication and menu pause');
 `,context);
 const persisted=JSON.parse(storage.get('jumpcraft-library-v1'));assert.equal(persisted.games.length,3);assert.equal(persisted.active,vm.runInContext('library.active',context));
+// Autosave must preserve a different game created by another open tab.
+const anotherTab={id:'other-tab-game',name:'Another tab adventure',settings:{},custom:null};storage.set('jumpcraft-library-v1',JSON.stringify({...persisted,games:[...persisted.games,anotherTab]}));vm.runInContext('save()',context);assert.equal(JSON.parse(storage.get('jumpcraft-library-v1')).games.length,4);
 const reloadNodes=new Map();const reloadDocument={...document,querySelector(s){if(!reloadNodes.has(s))reloadNodes.set(s,node());return reloadNodes.get(s)}};
-const reload={...context,document:reloadDocument};vm.createContext(reload);vm.runInContext(fs.readFileSync('dist/game.js','utf8'),reload);assert.equal(vm.runInContext('library.games.length',reload),3);assert.equal(vm.runInContext('library.active',reload),persisted.active);console.log('PASS: saved game library survives reload');
+const reload={...context,document:reloadDocument};vm.createContext(reload);vm.runInContext(fs.readFileSync('dist/game.js','utf8'),reload);assert.equal(vm.runInContext('library.games.length',reload),4);assert.equal(vm.runInContext('library.active',reload),persisted.active);console.log('PASS: timer waits for movement, hundredths, autosave across tabs, library survives reload');
